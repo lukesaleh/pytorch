@@ -856,6 +856,34 @@ def argsort(seq) -> List[int]:
     return list(reversed(sorted(a_r, key=getter, reverse=True)))  # noqa: C413
 
 
+def argsort_symint(seq: List[Union[int, torch.SymInt]]) -> List[int]:
+    stuff = list(enumerate(seq))
+
+    def cmp(a, b):
+        from torch.fx.experimental.symbolic_shapes import guard_size_oblivious
+
+        a_val = a[1]
+        b_val = b[1]
+
+        if guard_size_oblivious(a_val < b_val):
+            return -1
+        if guard_size_oblivious(a_val > b_val):
+            return 1
+        # If strides are the same, prefer the original order.
+        # (this matches argsort's algorithm).
+        # For strides = [2048, 2048, 16, 1], this is
+        # [3, 2, 1, 0].
+        if a[0] < b[0]:
+            return 1
+        if a[0] > b[0]:
+            return -1
+        return 0
+
+    stuff_sorted = sorted(stuff, key=functools.cmp_to_key(cmp))
+    result = [idx for idx, _ in stuff_sorted]
+    return result
+
+
 @functools.lru_cache(8)
 def get_dtype_size(dtype):
     return torch.empty((), dtype=dtype).element_size()
